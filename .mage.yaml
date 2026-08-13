@@ -1,0 +1,14 @@
+# mage-x (magex) configuration.
+# magex ships all build/test/lint/format targets with zero config; this file
+# only overrides a couple of defaults for this repo.
+project:
+  # Name the built binary `gtasks` (defaults to the module base name,
+  # "extract-google-tasks"). This matches the command name in the CLI.
+  binary: gtasks
+test:
+  # Auto-discover build tags but ignore the ones used for tooling/platforms.
+  auto_discover_build_tags: true
+  auto_discover_build_tags_exclude:
+    - mage
+    - windows
+  timeout: "5m"

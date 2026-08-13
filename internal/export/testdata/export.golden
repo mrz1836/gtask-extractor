@@ -1,0 +1,185 @@
+{
+  "schemaVersion": "1.0",
+  "export": {
+    "generatedAt": "2026-08-12T15:04:05Z",
+    "tool": "gtasks",
+    "toolVersion": "test",
+    "scope": "https://www.googleapis.com/auth/tasks.readonly",
+    "listId": "MDEyMzQ1",
+    "listTitle": "Sandbox",
+    "counts": {
+      "total": 7,
+      "needsAction": 5,
+      "completed": 2,
+      "deleted": 1,
+      "hidden": 1,
+      "assigned": 2,
+      "subtasks": 1,
+      "topLevel": 6
+    }
+  },
+  "list": {
+    "kind": "tasks#taskList",
+    "id": "MDEyMzQ1",
+    "etag": "\"etag-list\"",
+    "title": "Sandbox",
+    "updated": "2026-08-01T12:00:00.000Z",
+    "selfLink": "https://tasks.googleapis.com/tasks/v1/users/@me/lists/MDEyMzQ1"
+  },
+  "tasks": [
+    {
+      "kind": "tasks#task",
+      "id": "t1",
+      "etag": "\"etag1\"",
+      "title": "Buy groceries",
+      "notes": "milk & eggs <important>",
+      "status": "needsAction",
+      "updated": "2026-08-02T10:00:00.000Z",
+      "selfLink": "https://tasks.googleapis.com/tasks/v1/lists/MDEyMzQ1/tasks/t1",
+      "parent": "",
+      "position": "00000000000000000000",
+      "due": "2026-08-10T00:00:00.000Z",
+      "completed": null,
+      "deleted": false,
+      "hidden": false,
+      "links": [
+        {
+          "type": "email",
+          "description": "Related email",
+          "link": "https://mail.google.com/x"
+        }
+      ],
+      "webViewLink": "https://tasks.google.com/task/t1",
+      "assignmentInfo": null
+    },
+    {
+      "kind": "tasks#task",
+      "id": "t2",
+      "etag": "\"etag2\"",
+      "title": "Submit report",
+      "notes": "",
+      "status": "completed",
+      "updated": "2026-08-05T09:30:00.000Z",
+      "selfLink": "https://tasks.googleapis.com/tasks/v1/lists/MDEyMzQ1/tasks/t2",
+      "parent": "",
+      "position": "00000000000000000001",
+      "due": "",
+      "completed": "2026-08-05T09:30:00.000Z",
+      "deleted": false,
+      "hidden": false,
+      "links": [],
+      "webViewLink": "https://tasks.google.com/task/t2",
+      "assignmentInfo": null
+    },
+    {
+      "kind": "tasks#task",
+      "id": "t3",
+      "etag": "\"etag3\"",
+      "title": "Pick up dry cleaning",
+      "notes": "",
+      "status": "needsAction",
+      "updated": "2026-08-02T10:05:00.000Z",
+      "selfLink": "https://tasks.googleapis.com/tasks/v1/lists/MDEyMzQ1/tasks/t3",
+      "parent": "t1",
+      "position": "00000000000000000000",
+      "due": "",
+      "completed": null,
+      "deleted": false,
+      "hidden": false,
+      "links": [],
+      "webViewLink": "https://tasks.google.com/task/t3",
+      "assignmentInfo": null
+    },
+    {
+      "kind": "tasks#task",
+      "id": "t4",
+      "etag": "\"etag4\"",
+      "title": "Old cleared task",
+      "notes": "",
+      "status": "completed",
+      "updated": "2026-07-01T08:00:00.000Z",
+      "selfLink": "https://tasks.googleapis.com/tasks/v1/lists/MDEyMzQ1/tasks/t4",
+      "parent": "",
+      "position": "00000000000000000002",
+      "due": "",
+      "completed": "2026-07-01T08:00:00.000Z",
+      "deleted": false,
+      "hidden": true,
+      "links": [],
+      "webViewLink": "",
+      "assignmentInfo": null
+    },
+    {
+      "kind": "tasks#task",
+      "id": "t5",
+      "etag": "\"etag5\"",
+      "title": "Removed task",
+      "notes": "",
+      "status": "needsAction",
+      "updated": "2026-07-15T08:00:00.000Z",
+      "selfLink": "https://tasks.googleapis.com/tasks/v1/lists/MDEyMzQ1/tasks/t5",
+      "parent": "",
+      "position": "00000000000000000003",
+      "due": "",
+      "completed": null,
+      "deleted": true,
+      "hidden": false,
+      "links": [],
+      "webViewLink": "",
+      "assignmentInfo": null
+    },
+    {
+      "kind": "tasks#task",
+      "id": "t6",
+      "etag": "\"etag6\"",
+      "title": "Assigned from a Doc",
+      "notes": "",
+      "status": "needsAction",
+      "updated": "2026-08-06T11:00:00.000Z",
+      "selfLink": "https://tasks.googleapis.com/tasks/v1/lists/MDEyMzQ1/tasks/t6",
+      "parent": "",
+      "position": "00000000000000000004",
+      "due": "",
+      "completed": null,
+      "deleted": false,
+      "hidden": false,
+      "links": [],
+      "webViewLink": "",
+      "assignmentInfo": {
+        "linkToTask": "https://docs.google.com/document/d/abc/edit",
+        "surfaceType": "DOCUMENT",
+        "driveResourceInfo": {
+          "driveFileId": "abc123",
+          "resourceKey": "rk-1"
+        },
+        "spaceInfo": null
+      }
+    },
+    {
+      "kind": "tasks#task",
+      "id": "t7",
+      "etag": "\"etag7\"",
+      "title": "Assigned from a Space",
+      "notes": "",
+      "status": "needsAction",
+      "updated": "2026-08-06T12:00:00.000Z",
+      "selfLink": "https://tasks.googleapis.com/tasks/v1/lists/MDEyMzQ1/tasks/t7",
+      "parent": "",
+      "position": "00000000000000000005",
+      "due": "",
+      "completed": null,
+      "deleted": false,
+      "hidden": false,
+      "links": [],
+      "webViewLink": "",
+      "assignmentInfo": {
+        "linkToTask": "https://chat.google.com/room/xyz",
+        "surfaceType": "SPACE",
+        "driveResourceInfo": null,
+        "spaceInfo": {
+          "space": "spaces/AAAA"
+        }
+      }
+    }
+  ]
+}
