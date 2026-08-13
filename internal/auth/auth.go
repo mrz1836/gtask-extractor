@@ -22,13 +22,14 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	tasks "google.golang.org/api/tasks/v1"
+
+	"github.com/mrz1836/gtask-extractor/internal/atomicfile"
 )
 
 // ErrCredentialsNotFound is returned by Config when the credentials file is
@@ -290,31 +291,7 @@ func saveToken(path string, tok *oauth2.Token) error {
 		return fmt.Errorf("encoding token: %w", err)
 	}
 
-	dir := filepath.Dir(path)
-
-	tmp, err := os.CreateTemp(dir, ".gtasks-token-*.tmp")
-	if err != nil {
-		return fmt.Errorf("saving token %q: %w", path, err)
-	}
-
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }() // no-op after a successful rename
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("saving token %q: %w", path, err)
-	}
-
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("saving token %q: %w", path, err)
-	}
-
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("saving token %q: %w", path, err)
-	}
-
-	if err := os.Rename(tmpName, path); err != nil {
+	if err := atomicfile.Write(path, data, 0o600); err != nil {
 		return fmt.Errorf("saving token %q: %w", path, err)
 	}
 

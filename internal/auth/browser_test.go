@@ -2,8 +2,10 @@ package auth
 
 import (
 	"context"
-	"slices"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBrowserCommand(t *testing.T) {
@@ -20,14 +22,11 @@ func TestBrowserCommand(t *testing.T) {
 		{"freebsd", "xdg-open", []string{url}}, // default branch
 	}
 	for _, tc := range cases {
-		name, args := browserCommand(tc.goos, url)
-		if name != tc.wantName {
-			t.Errorf("%s: name = %q, want %q", tc.goos, name, tc.wantName)
-		}
-
-		if !slices.Equal(args, tc.wantArgs) {
-			t.Errorf("%s: args = %v, want %v", tc.goos, args, tc.wantArgs)
-		}
+		t.Run(tc.goos, func(t *testing.T) {
+			name, args := browserCommand(tc.goos, url)
+			assert.Equal(t, tc.wantName, name)
+			assert.Equal(t, tc.wantArgs, args)
+		})
 	}
 }
 
@@ -38,7 +37,5 @@ func TestOpenBrowserDefaultCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if err := openBrowserDefault(ctx, "https://example.com/auth"); err == nil {
-		t.Error("openBrowserDefault with a canceled context should return an error")
-	}
+	require.Error(t, openBrowserDefault(ctx, "https://example.com/auth"))
 }

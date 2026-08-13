@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,10 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 )
 
@@ -32,48 +32,31 @@ const desktopCreds = `{
 
 func TestConfigParsesDesktopCreds(t *testing.T) {
 	dir := t.TempDir()
-
 	path := filepath.Join(dir, "credentials.json")
-	if err := os.WriteFile(path, []byte(desktopCreds), 0o600); err != nil {
-		t.Fatal(err)
-	}
+
+	require.NoError(t, os.WriteFile(path, []byte(desktopCreds), 0o600))
 
 	cfg, err := Config(path)
-	if err != nil {
-		t.Fatalf("Config: %v", err)
-	}
-
-	if cfg.ClientID != "test-client-id.apps.googleusercontent.com" {
-		t.Errorf("ClientID = %q", cfg.ClientID)
-	}
-
-	if len(cfg.Scopes) != 1 || cfg.Scopes[0] != "https://www.googleapis.com/auth/tasks.readonly" {
-		t.Errorf("Scopes = %v, want the read-only Tasks scope only", cfg.Scopes)
-	}
-
-	if cfg.Endpoint.TokenURL != "https://oauth2.googleapis.com/token" {
-		t.Errorf("TokenURL = %q", cfg.Endpoint.TokenURL)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "test-client-id.apps.googleusercontent.com", cfg.ClientID)
+	assert.Equal(t, []string{"https://www.googleapis.com/auth/tasks.readonly"}, cfg.Scopes)
+	assert.Equal(t, "https://oauth2.googleapis.com/token", cfg.Endpoint.TokenURL)
 }
 
 func TestConfigMissingFile(t *testing.T) {
 	_, err := Config(filepath.Join(t.TempDir(), "nope.json"))
-	if !errors.Is(err, ErrCredentialsNotFound) {
-		t.Fatalf("err = %v, want ErrCredentialsNotFound", err)
-	}
+	require.ErrorIs(t, err, ErrCredentialsNotFound)
 }
 
 func TestConfigInvalidJSON(t *testing.T) {
 	dir := t.TempDir()
-
 	path := filepath.Join(dir, "credentials.json")
-	if err := os.WriteFile(path, []byte("not json"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 
-	if _, err := Config(path); err == nil || errors.Is(err, ErrCredentialsNotFound) {
-		t.Fatalf("err = %v, want a parse error", err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte("not json"), 0o600))
+
+	_, err := Config(path)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, ErrCredentialsNotFound)
 }
 
 func TestTokenRoundTripAndPerms(t *testing.T) {
@@ -86,60 +69,45 @@ func TestTokenRoundTripAndPerms(t *testing.T) {
 		TokenType:    "Bearer",
 		Expiry:       time.Now().Add(time.Hour).Round(time.Second),
 	}
-	if err := saveToken(path, want); err != nil {
-		t.Fatalf("saveToken: %v", err)
-	}
+	require.NoError(t, saveToken(path, want))
 
 	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	if runtime.GOOS != "windows" {
-		if perm := info.Mode().Perm(); perm != 0o600 {
-			t.Errorf("token perm = %o, want 600", perm)
-		}
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 	}
 
 	got, err := loadToken(path)
-	if err != nil {
-		t.Fatalf("loadToken: %v", err)
-	}
-
-	if got.AccessToken != want.AccessToken || got.RefreshToken != want.RefreshToken {
-		t.Errorf("round-trip mismatch: got %+v", got)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, want.AccessToken, got.AccessToken)
+	assert.Equal(t, want.RefreshToken, got.RefreshToken)
 }
 
 func TestLoadTokenMissingAndCorrupt(t *testing.T) {
-	if _, err := loadToken(filepath.Join(t.TempDir(), "absent.json")); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("missing token err = %v, want os.ErrNotExist", err)
-	}
+	_, err := loadToken(filepath.Join(t.TempDir(), "absent.json"))
+	require.ErrorIs(t, err, os.ErrNotExist)
 
 	dir := t.TempDir()
-
 	path := filepath.Join(dir, "token.json")
-	if err := os.WriteFile(path, []byte("{bad"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 
-	if _, err := loadToken(path); err == nil || errors.Is(err, os.ErrNotExist) {
-		t.Errorf("corrupt token err = %v, want a decode error", err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte("{bad"), 0o600))
+
+	_, err = loadToken(path)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestClientUsesCachedToken(t *testing.T) {
 	dir := t.TempDir()
-
 	tokenPath := filepath.Join(dir, "token.json")
-	if err := saveToken(tokenPath, &oauth2.Token{
+
+	require.NoError(t, saveToken(tokenPath, &oauth2.Token{
 		AccessToken:  "cached",
 		RefreshToken: "r",
 		TokenType:    "Bearer",
 		Expiry:       time.Now().Add(time.Hour),
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	cfg := &oauth2.Config{
 		ClientID: "cid",
@@ -147,27 +115,18 @@ func TestClientUsesCachedToken(t *testing.T) {
 	}
 	// A cached, unexpired token means no browser/network is touched.
 	c, err := Client(context.Background(), cfg, tokenPath, io.Discard)
-	if err != nil {
-		t.Fatalf("Client: %v", err)
-	}
-
-	if c == nil {
-		t.Fatal("Client returned a nil *http.Client")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, c)
 }
 
 func TestClientCorruptTokenIsFriendly(t *testing.T) {
 	dir := t.TempDir()
-
 	tokenPath := filepath.Join(dir, "token.json")
-	if err := os.WriteFile(tokenPath, []byte("{bad"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+
+	require.NoError(t, os.WriteFile(tokenPath, []byte("{bad"), 0o600))
 
 	_, err := Client(context.Background(), &oauth2.Config{}, tokenPath, io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "delete it") {
-		t.Fatalf("err = %v, want a friendly 'delete it and re-run' message", err)
-	}
+	require.ErrorContains(t, err, "delete it")
 }
 
 func TestCallbackHandler(t *testing.T) {
@@ -198,8 +157,8 @@ func TestCallbackHandler(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tc.path+"?"+tc.query, nil)
 			h(rr, req)
 
-			if tc.wantHTTP != 0 && rr.Code != tc.wantHTTP {
-				t.Errorf("HTTP status = %d, want %d", rr.Code, tc.wantHTTP)
+			if tc.wantHTTP != 0 {
+				assert.Equal(t, tc.wantHTTP, rr.Code)
 			}
 
 			if tc.sendsNone {
@@ -214,12 +173,12 @@ func TestCallbackHandler(t *testing.T) {
 
 			select {
 			case res := <-ch:
-				if tc.wantErr && res.err == nil {
-					t.Errorf("expected error result, got code %q", res.code)
+				if tc.wantErr {
+					require.Error(t, res.err)
 				}
 
-				if !tc.wantErr && res.code != tc.wantCode {
-					t.Errorf("code = %q, want %q", res.code, tc.wantCode)
+				if !tc.wantErr {
+					assert.Equal(t, tc.wantCode, res.code)
 				}
 			case <-time.After(time.Second):
 				t.Error("handler did not report a result")
@@ -234,9 +193,7 @@ func TestAuthorizeFullFlow(t *testing.T) {
 	var gotForm url.Values
 
 	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			t.Errorf("ParseForm: %v", err)
-		}
+		assert.NoError(t, r.ParseForm())
 
 		gotForm = r.Form
 
@@ -270,11 +227,10 @@ func TestAuthorizeFullFlow(t *testing.T) {
 
 		q := u.Query()
 		redirect := q.Get("redirect_uri")
-
 		state := q.Get("state")
-		if q.Get("code_challenge") == "" || q.Get("code_challenge_method") != "S256" {
-			t.Errorf("auth URL missing PKCE challenge: %s", rawURL)
-		}
+
+		assert.NotEmpty(t, q.Get("code_challenge"))
+		assert.Equal(t, "S256", q.Get("code_challenge_method"))
 
 		cb := redirect + "?state=" + url.QueryEscape(state) + "&code=fake-code"
 
@@ -287,26 +243,14 @@ func TestAuthorizeFullFlow(t *testing.T) {
 	}
 
 	tok, err := authorize(context.Background(), cfg, io.Discard, open)
-	if err != nil {
-		t.Fatalf("authorize: %v", err)
-	}
-
-	if tok.AccessToken != "final-access-token" || tok.RefreshToken != "final-refresh-token" {
-		t.Errorf("token = %+v, want the canned token", tok)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "final-access-token", tok.AccessToken)
+	assert.Equal(t, "final-refresh-token", tok.RefreshToken)
 
 	// PKCE verifier must have been posted to the token endpoint.
-	if gotForm.Get("code_verifier") == "" {
-		t.Error("token exchange did not include code_verifier (PKCE)")
-	}
-
-	if gotForm.Get("code") != "fake-code" {
-		t.Errorf("exchange code = %q, want fake-code", gotForm.Get("code"))
-	}
-
-	if gotForm.Get("grant_type") != "authorization_code" {
-		t.Errorf("grant_type = %q", gotForm.Get("grant_type"))
-	}
+	assert.NotEmpty(t, gotForm.Get("code_verifier"))
+	assert.Equal(t, "fake-code", gotForm.Get("code"))
+	assert.Equal(t, "authorization_code", gotForm.Get("grant_type"))
 }
 
 // stubSource returns a preset sequence of tokens, one per Token() call.
@@ -339,27 +283,19 @@ func TestPersistingTokenSourceRewritesOnRefresh(t *testing.T) {
 	}
 
 	// First call returns the already-known token: no write expected.
-	if _, err := p.Token(); err != nil {
-		t.Fatal(err)
-	}
+	_, err := p.Token()
+	require.NoError(t, err)
 
-	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("token file should not exist yet (no refresh happened)")
-	}
+	_, err = os.Stat(path)
+	require.ErrorIs(t, err, os.ErrNotExist)
 
 	// Second call returns a refreshed token: it must be persisted.
-	if _, err := p.Token(); err != nil {
-		t.Fatal(err)
-	}
+	_, err = p.Token()
+	require.NoError(t, err)
 
 	saved, err := loadToken(path)
-	if err != nil {
-		t.Fatalf("expected persisted token: %v", err)
-	}
-
-	if saved.AccessToken != "second" {
-		t.Errorf("persisted access token = %q, want second", saved.AccessToken)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "second", saved.AccessToken)
 }
 
 // TestPersistingTokenSourceBestEffort verifies that a token-cache write failure
@@ -379,15 +315,7 @@ func TestPersistingTokenSourceBestEffort(t *testing.T) {
 	}
 
 	tok, err := p.Token()
-	if err != nil {
-		t.Fatalf("Token() should not fail when persistence fails: %v", err)
-	}
-
-	if tok.AccessToken != "fresh" {
-		t.Errorf("Token() = %q, want the valid refreshed token", tok.AccessToken)
-	}
-
-	if !strings.Contains(warn.String(), "could not update cached token") {
-		t.Errorf("expected a non-fatal warning, got %q", warn.String())
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "fresh", tok.AccessToken)
+	assert.Contains(t, warn.String(), "could not update cached token")
 }

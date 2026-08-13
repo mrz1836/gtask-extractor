@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"runtime"
 )
@@ -13,7 +14,7 @@ func openBrowserDefault(ctx context.Context, url string) error {
 	//nolint:gosec // G204: command name and args come from a fixed GOOS allow-list, not user input
 	cmd := exec.CommandContext(ctx, name, args...)
 	if err := cmd.Start(); err != nil {
-		return err
+		return fmt.Errorf("starting browser: %w", err)
 	}
 	// The launcher (open/xdg-open/rundll32) forks the browser and exits almost
 	// immediately; reap it so we don't leak a zombie or the CommandContext
