@@ -1,14 +1,21 @@
-# mage-x (magex) configuration.
-# magex ships all build/test/lint/format targets with zero config; this file
-# only overrides a couple of defaults for this repo.
 project:
-  # Name the built binary `gtasks` (defaults to the module base name,
-  # "extract-google-tasks"). This matches the command name in the CLI.
-  binary: gtasks
+  name: gtask-extractor
+  binary: gtask-extractor
+  module: github.com/mrz1836/gtask-extractor
+  main: ./cmd/gtask-extractor/main.go
+
+build:
+  # Custom ldflags with version injection
+  ldflags:
+    - "-s -w"
+    - "-X main.version={{.Version}}"
+    - "-X main.commit={{.Commit}}"
+    - "-X main.buildDate={{.Date}}"
+  flags:
+    - "-trimpath"
+  output: "./cmd/gtask-extractor"
+
 test:
-  # Auto-discover build tags but ignore the ones used for tooling/platforms.
-  auto_discover_build_tags: true
-  auto_discover_build_tags_exclude:
-    - mage
-    - windows
-  timeout: "5m"
+  # Match CI timeout configuration (TEST_TIMEOUT_RACE_COVER in .env.base)
+  # Default magex timeout is 10m which was killing tests prematurely
+  timeout: 30m
