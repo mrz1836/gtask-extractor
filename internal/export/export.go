@@ -17,6 +17,8 @@ import (
 	"time"
 
 	tasks "google.golang.org/api/tasks/v1"
+
+	"github.com/mrz1836/gtask-extractor/internal/atomicfile"
 )
 
 const (
@@ -91,7 +93,7 @@ func buildFile(list *tasks.TaskList, apiTasks []*tasks.Task, opts Options) File 
 			Tool:        toolName,
 			ToolVersion: opts.ToolVersion,
 			Scope:       scopeReadonly,
-			ListID:      list.Id,
+			ListID:      ListID(list.Id),
 			ListTitle:   list.Title,
 			Counts:      tallyCounts(apiTasks),
 		},
@@ -111,10 +113,10 @@ func tallyCounts(apiTasks []*tasks.Task) Counts {
 
 		c.Total++
 
-		switch t.Status {
-		case "completed":
+		switch Status(t.Status) {
+		case StatusCompleted:
 			c.Completed++
-		case "needsAction":
+		case StatusNeedsAction:
 			c.NeedsAction++
 		}
 
@@ -156,8 +158,8 @@ func marshal(file File) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// writeAtomic writes the document to a temp file and renames it into place so a
-// reader never observes a partially written file.
+// writeAtomic renders the document, ensures the output directory exists, and
+// writes it atomically so a reader never observes a partially written file.
 func writeAtomic(path string, file File) error {
 	data, err := marshal(file)
 	if err != nil {
@@ -169,33 +171,7 @@ func writeAtomic(path string, file File) error {
 		return fmt.Errorf("creating output directory %q: %w", dir, mkErr)
 	}
 
-	tmp, err := os.CreateTemp(dir, ".gtasks-*.tmp")
-	if err != nil {
-		return fmt.Errorf("creating temp file: %w", err)
-	}
-
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }() // no-op after a successful rename
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("writing export: %w", err)
-	}
-
-	if err := tmp.Chmod(0o644); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("setting output permissions: %w", err)
-	}
-
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("closing temp file: %w", err)
-	}
-
-	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("finalizing output %q: %w", path, err)
-	}
-
-	return nil
+	return atomicfile.Write(path, data, 0o644)
 }
 
 // filename derives output/<slug>-<listID>-<YYYY-MM-DD>.json, dropping any

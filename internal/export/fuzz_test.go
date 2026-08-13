@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	tasks "google.golang.org/api/tasks/v1"
 )
 
@@ -31,32 +32,18 @@ func FuzzFilename(f *testing.F) {
 	f.Fuzz(func(t *testing.T, title, id string) {
 		name := filename(&tasks.TaskList{Title: title, Id: id}, fixedNow())
 
-		if !strings.HasSuffix(name, ".json") {
-			t.Fatalf("filename %q does not end in .json (title=%q id=%q)", name, title, id)
-		}
+		require.True(t, strings.HasSuffix(name, ".json"), "filename %q does not end in .json (title=%q id=%q)", name, title, id)
+		require.Greater(t, len(name), len(".json"), "filename %q has no name before the extension", name)
+		require.False(t, strings.ContainsAny(name, `/\`), "filename %q contains a path separator", name)
+		require.NotContains(t, name, "..", "filename %q contains %q", name, "..")
+		require.Equal(t, filepath.Base(name), name, "filename %q is not a single path component", name)
 
-		if len(name) <= len(".json") {
-			t.Fatalf("filename %q has no name before the extension", name)
-		}
-
-		if strings.ContainsAny(name, `/\`) {
-			t.Fatalf("filename %q contains a path separator", name)
-		}
-
-		if strings.Contains(name, "..") {
-			t.Fatalf("filename %q contains %q", name, "..")
-		}
-
-		if name != filepath.Base(name) {
-			t.Fatalf("filename %q is not a single path component", name)
-		}
 		// Joining into an output directory must not escape it.
-		if dir := filepath.Dir(filepath.Join("output", name)); dir != "output" {
-			t.Fatalf("filename %q escapes its directory: dir=%q", name, dir)
-		}
+		dir := filepath.Dir(filepath.Join("output", name))
+		require.Equal(t, "output", dir, "filename %q escapes its directory: dir=%q", name, dir)
+
 		// Deterministic for the same inputs.
-		if again := filename(&tasks.TaskList{Title: title, Id: id}, fixedNow()); again != name {
-			t.Fatalf("filename not deterministic: %q vs %q", name, again)
-		}
+		again := filename(&tasks.TaskList{Title: title, Id: id}, fixedNow())
+		require.Equal(t, name, again, "filename not deterministic: %q vs %q", name, again)
 	})
 }

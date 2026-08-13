@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	tasks "google.golang.org/api/tasks/v1"
 )
 
@@ -151,22 +153,13 @@ func TestRunGolden(t *testing.T) {
 		ToolVersion: "test",
 		Now:         fixedNow,
 	})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
+	require.NoError(t, err)
 
-	if fl.gotID != "MDEyMzQ1" {
-		t.Errorf("ListTasks got list id %q, want MDEyMzQ1", fl.gotID)
-	}
-
-	if base := filepath.Base(path); base != "sandbox-MDEyMzQ1-2026-08-12.json" {
-		t.Errorf("filename = %q, want sandbox-MDEyMzQ1-2026-08-12.json", base)
-	}
+	assert.Equal(t, "MDEyMzQ1", fl.gotID)
+	assert.Equal(t, "sandbox-MDEyMzQ1-2026-08-12.json", filepath.Base(path))
 
 	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading export: %v", err)
-	}
+	require.NoError(t, err)
 
 	// The fixture uses a .golden extension (not .json) so repo-wide JSON
 	// formatters (e.g. `magex format:fix`) never rewrite this byte-exact file.
@@ -178,28 +171,18 @@ func TestRunGolden(t *testing.T) {
 	}
 
 	want, err := os.ReadFile(goldenPath)
-	if err != nil {
-		t.Fatalf("reading golden (run `go test -run TestRunGolden -update`): %v", err)
-	}
+	require.NoError(t, err, "reading golden (run `go test -run TestRunGolden -update`)")
 
-	if !bytes.Equal(got, want) {
-		t.Errorf("export does not match golden.\n--- got ---\n%s\n--- want ---\n%s", got, want)
-	}
+	assert.Equal(t, want, got)
 
 	// The file must end with a single trailing newline.
-	if !bytes.HasSuffix(got, []byte("}\n")) {
-		t.Errorf("export should end with a trailing newline")
-	}
+	assert.True(t, bytes.HasSuffix(got, []byte("}\n")))
 
 	// HTML must not be escaped.
-	if !bytes.Contains(got, []byte("milk & eggs <important>")) {
-		t.Errorf("notes appear to be HTML-escaped; SetEscapeHTML(false) not honored")
-	}
+	assert.Contains(t, string(got), "milk & eggs <important>")
 
 	wantCounts := Counts{Total: 7, NeedsAction: 5, Completed: 2, Deleted: 1, Hidden: 1, Assigned: 2, Subtasks: 1, TopLevel: 6}
-	if counts != wantCounts {
-		t.Errorf("counts = %+v, want %+v", counts, wantCounts)
-	}
+	assert.Equal(t, wantCounts, counts)
 }
 
 // TestRunPreservesEveryField decodes the output and asserts the fields the raw
@@ -209,52 +192,34 @@ func TestRunPreservesEveryField(t *testing.T) {
 	fl := &fakeLister{tasks: sampleTasks()}
 
 	path, _, err := Run(context.Background(), fl, sampleList(), Options{OutDir: dir, ToolVersion: "test", Now: fixedNow})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
+	require.NoError(t, err)
 
 	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	var file File
-	if err := json.Unmarshal(data, &file); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(data, &file))
 
 	// A never-completed task keeps completed:null (present, not omitted).
 	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, json.Unmarshal(data, &raw))
 
 	rawTasks := raw["tasks"].([]any)
 
 	t1 := rawTasks[0].(map[string]any)
 	for _, key := range []string{"completed", "parent", "deleted", "hidden", "links", "assignmentInfo", "webViewLink", "position"} {
-		if _, ok := t1[key]; !ok {
-			t.Errorf("task[0] missing key %q (omitempty leak?)", key)
-		}
+		assert.Contains(t, t1, key, "task[0] missing key %q (omitempty leak?)", key)
 	}
 
-	if t1["completed"] != nil {
-		t.Errorf("task[0].completed should be null, got %v", t1["completed"])
-	}
-
-	if t1["deleted"] != false {
-		t.Errorf("task[0].deleted should be false, got %v", t1["deleted"])
-	}
+	assert.Nil(t, t1["completed"], "task[0].completed should be null")
+	assert.Equal(t, false, t1["deleted"], "task[0].deleted should be false")
 	// Links must serialize as an array even when empty.
 	t2 := rawTasks[1].(map[string]any)
-	if _, ok := t2["links"].([]any); !ok {
-		t.Errorf("task[1].links should be a JSON array, got %T", t2["links"])
-	}
+	assert.IsType(t, []any{}, t2["links"], "task[1].links should be a JSON array")
 
 	// A completed task keeps a concrete timestamp.
-	if file.Tasks[1].Completed == nil || *file.Tasks[1].Completed == "" {
-		t.Errorf("task[1].completed should be a timestamp")
-	}
+	require.NotNil(t, file.Tasks[1].Completed)
+	assert.NotEmpty(t, *file.Tasks[1].Completed)
 }
 
 func TestRunEmptyList(t *testing.T) {
@@ -262,22 +227,14 @@ func TestRunEmptyList(t *testing.T) {
 	fl := &fakeLister{tasks: nil}
 
 	path, counts, err := Run(context.Background(), fl, sampleList(), Options{OutDir: dir, Now: fixedNow})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
+	require.NoError(t, err)
 
-	if counts.Total != 0 {
-		t.Errorf("counts.Total = %d, want 0", counts.Total)
-	}
+	assert.Equal(t, 0, counts.Total)
 
 	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if !bytes.Contains(data, []byte(`"tasks": []`)) {
-		t.Errorf("empty export should contain `\"tasks\": []`, got:\n%s", data)
-	}
+	assert.Contains(t, string(data), `"tasks": []`)
 }
 
 func TestRunListerError(t *testing.T) {
@@ -286,9 +243,7 @@ func TestRunListerError(t *testing.T) {
 	fl := &fakeLister{err: sentinel}
 
 	_, _, err := Run(context.Background(), fl, sampleList(), Options{OutDir: dir, Now: fixedNow})
-	if !errors.Is(err, sentinel) {
-		t.Fatalf("Run error = %v, want wrapping sentinel", err)
-	}
+	require.ErrorIs(t, err, sentinel)
 }
 
 func TestRunAtomicPermissions(t *testing.T) {
@@ -296,36 +251,25 @@ func TestRunAtomicPermissions(t *testing.T) {
 	fl := &fakeLister{tasks: sampleTasks()}
 
 	path, _, err := Run(context.Background(), fl, sampleList(), Options{OutDir: dir, Now: fixedNow})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if perm := info.Mode().Perm(); perm != 0o644 {
-		t.Errorf("output perm = %o, want 644", perm)
-	}
+	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
 	// No temp files should be left behind.
 	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".gtasks-") {
-			t.Errorf("leftover temp file: %s", e.Name())
-		}
+		assert.False(t, strings.HasPrefix(e.Name(), ".gtasks-"), "leftover temp file: %s", e.Name())
 	}
 }
 
 func TestRunNilList(t *testing.T) {
 	path, counts, err := Run(context.Background(), &fakeLister{}, nil, Options{OutDir: t.TempDir()})
-	if !errors.Is(err, errNilTaskList) {
-		t.Fatalf("err = %v, want errNilTaskList", err)
-	}
+	require.ErrorIs(t, err, errNilTaskList)
 
-	if path != "" || counts != (Counts{}) {
-		t.Errorf("expected empty path and zero counts, got path=%q counts=%+v", path, counts)
-	}
+	assert.Empty(t, path)
+	assert.Equal(t, Counts{}, counts)
 }
 
 func TestRunSkipsNilTasks(t *testing.T) {
@@ -337,48 +281,42 @@ func TestRunSkipsNilTasks(t *testing.T) {
 	}}
 
 	path, counts, err := Run(context.Background(), fl, sampleList(), Options{OutDir: dir, Now: fixedNow})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if counts.Total != 2 {
-		t.Errorf("counts.Total = %d, want 2 (nil skipped)", counts.Total)
-	}
+	assert.Equal(t, 2, counts.Total)
 
 	var file File
 
 	data, _ := os.ReadFile(path)
-	if err := json.Unmarshal(data, &file); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, json.Unmarshal(data, &file))
 
-	if len(file.Tasks) != 2 {
-		t.Errorf("wrote %d tasks, want 2 (nil skipped)", len(file.Tasks))
-	}
+	assert.Len(t, file.Tasks, 2)
 }
 
 func TestFilenameSanitize(t *testing.T) {
 	cases := []struct {
+		name      string
 		title, id string
 		want      string
 	}{
-		{"Sandbox", "ABC", "sandbox-ABC-2026-08-12.json"},
-		{"My Tasks!", "id1", "my-tasks-id1-2026-08-12.json"},
-		{"a/b\\c:d", "id2", "a-b-c-d-id2-2026-08-12.json"},
-		{"  Leading/Trailing  ", "id3", "leading-trailing-id3-2026-08-12.json"},
-		{"Multiple   Spaces___here", "id4", "multiple-spaces-here-id4-2026-08-12.json"},
-		{"日本語", "id5", "id5-id5-2026-08-12.json"}, // non-ASCII slug empties -> falls back to id
-		{"", "OnlyID", "onlyid-OnlyID-2026-08-12.json"},
-		{strings.Repeat("x", 200), "id6", strings.Repeat("x", 80) + "-id6-2026-08-12.json"},
+		{"simple", "Sandbox", "ABC", "sandbox-ABC-2026-08-12.json"},
+		{"spaces and punctuation", "My Tasks!", "id1", "my-tasks-id1-2026-08-12.json"},
+		{"path separators", "a/b\\c:d", "id2", "a-b-c-d-id2-2026-08-12.json"},
+		{"leading and trailing spaces", "  Leading/Trailing  ", "id3", "leading-trailing-id3-2026-08-12.json"},
+		{"collapses repeated separators", "Multiple   Spaces___here", "id4", "multiple-spaces-here-id4-2026-08-12.json"},
+		// non-ASCII slug empties -> falls back to id.
+		{"non-ascii falls back to id", "日本語", "id5", "id5-id5-2026-08-12.json"},
+		{"empty title uses id", "", "OnlyID", "onlyid-OnlyID-2026-08-12.json"},
+		{"very long title truncated", strings.Repeat("x", 200), "id6", strings.Repeat("x", 80) + "-id6-2026-08-12.json"},
 		// Both title and id reduce to empty: fall back to a single clean segment
 		// (no doubled dash).
-		{"日本語", "！！！", "tasklist-2026-08-12.json"},
+		{"both empty -> tasklist", "日本語", "！！！", "tasklist-2026-08-12.json"},
 	}
 	for _, c := range cases {
-		got := filename(&tasks.TaskList{Title: c.title, Id: c.id}, fixedNow())
-		if got != c.want {
-			t.Errorf("filename(%q,%q) = %q, want %q", c.title, c.id, got, c.want)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			got := filename(&tasks.TaskList{Title: c.title, Id: c.id}, fixedNow())
+			assert.Equal(t, c.want, got)
+		})
 	}
 }
 
@@ -399,14 +337,14 @@ func TestNoDroppedFields(t *testing.T) {
 		{"SpaceInfo", reflect.TypeFor[tasks.SpaceInfo](), reflect.TypeFor[SpaceInfo]()},
 	}
 	for _, c := range cases {
-		apiTags := jsonTags(c.api)
+		t.Run(c.name, func(t *testing.T) {
+			apiTags := jsonTags(c.api)
 
-		envTags := jsonTags(c.env)
-		for tag := range apiTags {
-			if !envTags[tag] {
-				t.Errorf("%s: API field %q is not represented in the export envelope (library bump added a field?)", c.name, tag)
+			envTags := jsonTags(c.env)
+			for tag := range apiTags {
+				assert.True(t, envTags[tag], "%s: API field %q is not represented in the export envelope (library bump added a field?)", c.name, tag)
 			}
-		}
+		})
 	}
 }
 

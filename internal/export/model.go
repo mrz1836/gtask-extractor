@@ -8,6 +8,25 @@ import (
 // when the envelope shape changes in a backwards-incompatible way.
 const SchemaVersion = "1.0"
 
+// Domain newtypes for the identifiers and enums the exporter owns. They are
+// plain string kinds, so they marshal to JSON exactly as the underlying string;
+// the win is compile-time distinction between a list ID, a task ID, and a task
+// status at the boundaries where the Google Tasks API hands back untyped strings.
+type (
+	// ListID identifies a Google Tasks task list.
+	ListID string
+	// TaskID identifies a task (and, via Task.Parent, its parent task).
+	TaskID string
+	// Status is a task's completion state.
+	Status string
+)
+
+// The task statuses the Google Tasks API reports.
+const (
+	StatusNeedsAction Status = "needsAction"
+	StatusCompleted   Status = "completed"
+)
+
 // File is the top-level exported document. Unlike the raw google.golang.org/api
 // task types, none of the envelope structs use `omitempty`: every field is
 // always emitted so that "false", "", null and empty-array values are preserved
@@ -26,7 +45,7 @@ type Summary struct {
 	Tool        string `json:"tool"`
 	ToolVersion string `json:"toolVersion"`
 	Scope       string `json:"scope"`
-	ListID      string `json:"listId"`
+	ListID      ListID `json:"listId"`
 	ListTitle   string `json:"listTitle"`
 	Counts      Counts `json:"counts"`
 }
@@ -47,7 +66,7 @@ type Counts struct {
 // TaskList mirrors tasks.TaskList with every field always present.
 type TaskList struct {
 	Kind     string `json:"kind"`
-	ID       string `json:"id"`
+	ID       ListID `json:"id"`
 	Etag     string `json:"etag"`
 	Title    string `json:"title"`
 	Updated  string `json:"updated"`
@@ -62,14 +81,14 @@ type TaskList struct {
 // never null.
 type Task struct {
 	Kind           string          `json:"kind"`
-	ID             string          `json:"id"`
+	ID             TaskID          `json:"id"`
 	Etag           string          `json:"etag"`
 	Title          string          `json:"title"`
 	Notes          string          `json:"notes"`
-	Status         string          `json:"status"`
+	Status         Status          `json:"status"`
 	Updated        string          `json:"updated"`
 	SelfLink       string          `json:"selfLink"`
-	Parent         string          `json:"parent"`
+	Parent         TaskID          `json:"parent"`
 	Position       string          `json:"position"`
 	Due            string          `json:"due"`
 	Completed      *string         `json:"completed"`
@@ -115,7 +134,7 @@ func fromAPITaskList(tl *tasks.TaskList) TaskList {
 
 	return TaskList{
 		Kind:     tl.Kind,
-		ID:       tl.Id,
+		ID:       ListID(tl.Id),
 		Etag:     tl.Etag,
 		Title:    tl.Title,
 		Updated:  tl.Updated,
@@ -127,14 +146,14 @@ func fromAPITaskList(tl *tasks.TaskList) TaskList {
 func fromAPITask(t *tasks.Task) Task {
 	return Task{
 		Kind:           t.Kind,
-		ID:             t.Id,
+		ID:             TaskID(t.Id),
 		Etag:           t.Etag,
 		Title:          t.Title,
 		Notes:          t.Notes,
-		Status:         t.Status,
+		Status:         Status(t.Status),
 		Updated:        t.Updated,
 		SelfLink:       t.SelfLink,
-		Parent:         t.Parent,
+		Parent:         TaskID(t.Parent),
 		Position:       t.Position,
 		Due:            t.Due,
 		Completed:      copyStringPtr(t.Completed),
