@@ -220,6 +220,8 @@ anywhere.
 `gtasks` has two modes: a friendly **interactive picker** (default) and a scriptable **`export`**
 subcommand.
 
+<br/>
+
 ### Interactive (default)
 
 ```bash
@@ -229,6 +231,8 @@ gtasks
 Prints a numbered table of your task lists (with IDs); type a number to export one (or `q` to
 quit), then it offers to export another. Needs a terminal — if stdin/stdout aren't a TTY it exits
 `2` (use `export` below for scripts).
+
+<br/>
 
 ### Non-interactive (`export`) — scripts, cron, re-pulls
 
@@ -243,6 +247,8 @@ gtasks export --all --output-dir "backups/$(date +%F)"
 
 `--list` and `--all` are mutually exclusive; an unknown ID exits `2`. The first run still opens the
 browser once; afterward the cached token is reused, so `export` runs **unattended**.
+
+<br/>
 
 ### Flags
 
