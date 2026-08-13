@@ -4,6 +4,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // FuzzSelectIndex verifies that arbitrary input never makes SelectIndex panic
@@ -30,8 +32,7 @@ func FuzzSelectIndex(f *testing.F) {
 		}
 
 		idx, quit, err := SelectIndex(io.Discard, strings.NewReader(input), "pick: ", n)
-		if err == nil && !quit && (idx < 0 || idx >= n) {
-			t.Fatalf("SelectIndex returned out-of-range index %d for n=%d (input=%q)", idx, n, input)
-		}
+		require.False(t, err == nil && !quit && (idx < 0 || idx >= n),
+			"SelectIndex returned out-of-range index %d for n=%d (input=%q)", idx, n, input)
 	})
 }
