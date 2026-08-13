@@ -42,9 +42,9 @@ changelog:
 # Builder
 # ---------------------------
 builds:
-  - id: gtasks
-    main: .
-    binary: gtasks
+  - id: gtask-extractor
+    main: ./cmd/gtask-extractor
+    binary: gtask-extractor
     env:
       - CGO_ENABLED=0
     goos:
@@ -56,13 +56,15 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/mrz1836/gtask-extractor/internal/buildinfo.Version={{ .Version }}
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.buildDate={{.Date}}
 
 # ---------------------------
 # Archives
 # ---------------------------
 archives:
-  - id: gtasks
+  - id: gtask-extractor
     name_template: >-
       {{- .ProjectName }}_{{- .Version }}_{{- .Os }}_{{- .Arch }}
     files:

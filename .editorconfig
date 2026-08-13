@@ -20,9 +20,16 @@ indent_size  = 2
 indent_style = space
 indent_size  = 4
 
+[*.{js,mjs,cjs,ts}]
+indent_style = space
+indent_size  = 4
+
 [*.py]
 indent_style = space
 indent_size  = 4
+
+[{Makefile,*.mk}]
+indent_style = tab
 
 [*.{xml,cff}]
 indent_style = space
