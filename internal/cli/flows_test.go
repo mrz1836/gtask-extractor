@@ -10,8 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/api/googleapi"
 	tasks "google.golang.org/api/tasks/v1"
+
+	"github.com/mrz1836/gtask-extractor/internal/export"
 )
 
 // fakeClient satisfies taskLister (and, via ListTasks, export.Lister) with no
@@ -35,9 +39,7 @@ func exitCodeOf(t *testing.T, err error) int {
 	t.Helper()
 
 	ce, ok := errors.AsType[*codedError](err)
-	if !ok {
-		t.Fatalf("error %v is not a *codedError", err)
-	}
+	require.True(t, ok)
 
 	return ce.code
 }
@@ -51,62 +53,47 @@ func TestRunExportWithMultiIDInOrder(t *testing.T) {
 	fc := &fakeClient{lists: sampleLists(), tasks: oneTask()}
 
 	var out bytes.Buffer
-	if err := runExportWith(context.Background(), fc, &options{outputDir: dir}, []string{"c", "a"}, false, &out, io.Discard); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, runExportWith(context.Background(), fc, &options{outputDir: dir}, []export.ListID{"c", "a"}, false, &out, io.Discard))
 
-	if entries, _ := os.ReadDir(dir); len(entries) != 2 {
-		t.Fatalf("wrote %d files, want 2", len(entries))
-	}
+	entries, _ := os.ReadDir(dir)
+	require.Len(t, entries, 2)
+
 	// Request order (Charlie before Alpha) must be preserved in the output.
 	so := out.String()
-	if ci, ai := strings.Index(so, "Charlie"), strings.Index(so, "Alpha"); ci < 0 || ai < 0 || ci > ai {
-		t.Errorf("expected Charlie before Alpha:\n%s", so)
-	}
+	ci, ai := strings.Index(so, "Charlie"), strings.Index(so, "Alpha")
+	assert.True(t, ci >= 0 && ai >= 0 && ci <= ai)
 }
 
 func TestRunExportWithAll(t *testing.T) {
 	dir := t.TempDir()
 	fc := &fakeClient{lists: sampleLists(), tasks: oneTask()}
 
-	if err := runExportWith(context.Background(), fc, &options{outputDir: dir}, nil, true, io.Discard, io.Discard); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, runExportWith(context.Background(), fc, &options{outputDir: dir}, nil, true, io.Discard, io.Discard))
 
-	if entries, _ := os.ReadDir(dir); len(entries) != 3 {
-		t.Errorf("wrote %d files, want 3 (--all)", len(entries))
-	}
+	entries, _ := os.ReadDir(dir)
+	assert.Len(t, entries, 3)
 }
 
 func TestRunExportWithListErrorIsAPI(t *testing.T) {
 	fc := &fakeClient{listsErr: &googleapi.Error{Code: 500}}
 
 	err := runExportWith(context.Background(), fc, &options{outputDir: t.TempDir()}, nil, true, io.Discard, io.Discard)
-	if got := exitCodeOf(t, err); got != exitAPI {
-		t.Errorf("code = %d, want exitAPI (%d)", got, exitAPI)
-	}
+	assert.Equal(t, exitAPI, exitCodeOf(t, err))
 }
 
 func TestRunExportWithUnknownIDIsUsage(t *testing.T) {
 	fc := &fakeClient{lists: sampleLists()}
 
-	err := runExportWith(context.Background(), fc, &options{outputDir: t.TempDir()}, []string{"zzz"}, false, io.Discard, io.Discard)
-	if got := exitCodeOf(t, err); got != exitUsage {
-		t.Errorf("code = %d, want exitUsage (%d)", got, exitUsage)
-	}
-
-	if !errors.Is(err, errListNotFound) {
-		t.Errorf("want errListNotFound, got %v", err)
-	}
+	err := runExportWith(context.Background(), fc, &options{outputDir: t.TempDir()}, []export.ListID{"zzz"}, false, io.Discard, io.Discard)
+	assert.Equal(t, exitUsage, exitCodeOf(t, err))
+	assert.ErrorIs(t, err, errListNotFound)
 }
 
 func TestRunExportWithExportFailureIsOutput(t *testing.T) {
 	fc := &fakeClient{lists: sampleLists(), tasksErr: errors.New("boom")}
 
-	err := runExportWith(context.Background(), fc, &options{outputDir: t.TempDir()}, []string{"a"}, false, io.Discard, io.Discard)
-	if got := exitCodeOf(t, err); got != exitOutput {
-		t.Errorf("code = %d, want exitOutput (%d)", got, exitOutput)
-	}
+	err := runExportWith(context.Background(), fc, &options{outputDir: t.TempDir()}, []export.ListID{"a"}, false, io.Discard, io.Discard)
+	assert.Equal(t, exitOutput, exitCodeOf(t, err))
 }
 
 // --- exportOnce (interactive iteration) ---
@@ -117,22 +104,17 @@ func TestExportOnceEmptyAccount(t *testing.T) {
 	var errW bytes.Buffer
 
 	more, err := exportOnce(context.Background(), &options{outputDir: t.TempDir()}, fc, strings.NewReader(""), io.Discard, &errW)
-	if err != nil || more {
-		t.Fatalf("more=%v err=%v, want false,nil", more, err)
-	}
+	require.NoError(t, err)
+	require.False(t, more)
 
-	if !strings.Contains(errW.String(), "No task lists") {
-		t.Errorf("errW = %q", errW.String())
-	}
+	assert.Contains(t, errW.String(), "No task lists")
 }
 
 func TestExportOnceListErrorIsAPI(t *testing.T) {
 	fc := &fakeClient{listsErr: &googleapi.Error{Code: 403}}
 
 	_, err := exportOnce(context.Background(), &options{outputDir: t.TempDir()}, fc, strings.NewReader(""), io.Discard, io.Discard)
-	if got := exitCodeOf(t, err); got != exitAPI {
-		t.Errorf("code = %d, want exitAPI", got)
-	}
+	assert.Equal(t, exitAPI, exitCodeOf(t, err))
 }
 
 func TestExportOnceSelectThenStop(t *testing.T) {
@@ -141,17 +123,11 @@ func TestExportOnceSelectThenStop(t *testing.T) {
 
 	more, err := exportOnce(context.Background(), &options{outputDir: dir}, fc,
 		bufio.NewReader(strings.NewReader("1\nn\n")), io.Discard, io.Discard)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	assert.False(t, more)
 
-	if more {
-		t.Errorf("more = true, want false (answered n)")
-	}
-
-	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
-		t.Errorf("wrote %d files, want 1", len(entries))
-	}
+	entries, _ := os.ReadDir(dir)
+	assert.Len(t, entries, 1)
 }
 
 func TestExportOnceSelectThenContinue(t *testing.T) {
@@ -159,13 +135,8 @@ func TestExportOnceSelectThenContinue(t *testing.T) {
 
 	more, err := exportOnce(context.Background(), &options{outputDir: t.TempDir()}, fc,
 		bufio.NewReader(strings.NewReader("1\ny\n")), io.Discard, io.Discard)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !more {
-		t.Errorf("more = false, want true (answered y)")
-	}
+	require.NoError(t, err)
+	assert.True(t, more)
 }
 
 func TestExportOnceQuitAndEOF(t *testing.T) {
@@ -174,9 +145,8 @@ func TestExportOnceQuitAndEOF(t *testing.T) {
 
 		more, err := exportOnce(context.Background(), &options{outputDir: t.TempDir()}, fc,
 			bufio.NewReader(strings.NewReader(in)), io.Discard, io.Discard)
-		if err != nil || more {
-			t.Errorf("input %q: more=%v err=%v, want false,nil", in, more, err)
-		}
+		require.NoError(t, err)
+		assert.False(t, more)
 	}
 }
 
@@ -187,17 +157,13 @@ func TestExportListAPIErrorIsAPI(t *testing.T) {
 
 	err := exportList(context.Background(), fl, &tasks.TaskList{Id: "L", Title: "X"},
 		&options{outputDir: t.TempDir()}, io.Discard, io.Discard)
-	if got := exitCodeOf(t, err); got != exitAPI {
-		t.Errorf("code = %d, want exitAPI", got)
-	}
+	assert.Equal(t, exitAPI, exitCodeOf(t, err))
 }
 
 func TestExportListWriteErrorIsOutput(t *testing.T) {
 	// Point the output dir at a regular file so MkdirAll fails.
 	f, err := os.CreateTemp(t.TempDir(), "notadir")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	_ = f.Close()
 
@@ -205,7 +171,5 @@ func TestExportListWriteErrorIsOutput(t *testing.T) {
 
 	err = exportList(context.Background(), fl, &tasks.TaskList{Id: "L", Title: "X"},
 		&options{outputDir: f.Name()}, io.Discard, io.Discard)
-	if got := exitCodeOf(t, err); got != exitOutput {
-		t.Errorf("code = %d, want exitOutput", got)
-	}
+	assert.Equal(t, exitOutput, exitCodeOf(t, err))
 }

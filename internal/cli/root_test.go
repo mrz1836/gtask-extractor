@@ -3,9 +3,10 @@ package cli
 import (
 	"bytes"
 	"errors"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/api/googleapi"
 )
 
@@ -14,60 +15,44 @@ func TestCodedError(t *testing.T) {
 	err := coded(exitAPI, base)
 
 	ce, ok := errors.AsType[*codedError](err)
-	if !ok {
-		t.Fatalf("coded did not return a *codedError")
-	}
+	require.True(t, ok)
 
-	if ce.code != exitAPI {
-		t.Errorf("code = %d, want %d", ce.code, exitAPI)
-	}
-
-	if !errors.Is(err, base) {
-		t.Errorf("coded error should unwrap to the base error")
-	}
-
-	if err.Error() != "boom" {
-		t.Errorf("Error() = %q, want %q", err.Error(), "boom")
-	}
+	assert.Equal(t, exitAPI, ce.code)
+	require.ErrorIs(t, err, base)
+	assert.Equal(t, "boom", err.Error())
 }
 
 func TestIsAPIError(t *testing.T) {
-	if !isAPIError(&googleapi.Error{Code: 500}) {
-		t.Error("googleapi.Error should be recognized")
-	}
-
-	if isAPIError(errors.New("plain")) {
-		t.Error("plain error should not be recognized as an API error")
-	}
+	assert.True(t, isAPIError(&googleapi.Error{Code: 500}))
+	assert.False(t, isAPIError(errors.New("plain")))
 }
 
 func TestFriendlyAPIError(t *testing.T) {
 	cases := []struct {
+		name    string
 		code    int
 		wantSub string
 	}{
-		{401, "re-authorize"},
-		{403, "Tasks API is enabled"},
+		{"http 401", 401, "re-authorize"},
+		{"http 403", 403, "Tasks API is enabled"},
 	}
 
 	const tokenPath = "token.json"
+
 	for _, c := range cases {
-		err := friendlyAPIError(&googleapi.Error{Code: c.code, Message: "m"}, tokenPath)
-		if !strings.Contains(err.Error(), c.wantSub) {
-			t.Errorf("code %d: %q does not contain %q", c.code, err.Error(), c.wantSub)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			err := friendlyAPIError(&googleapi.Error{Code: c.code, Message: "m"}, tokenPath)
+			assert.Contains(t, err.Error(), c.wantSub)
+		})
 	}
 
 	// A non-API error is passed through unchanged.
 	base := errors.New("plain")
-	if got := friendlyAPIError(base, tokenPath); !errors.Is(got, base) {
-		t.Errorf("friendlyAPIError(plain) = %v, want the same error", got)
-	}
+	require.ErrorIs(t, friendlyAPIError(base, tokenPath), base)
+
 	// An API error with an unmapped code is passed through.
 	other := &googleapi.Error{Code: 500}
-	if got := friendlyAPIError(other, tokenPath); !errors.Is(got, error(other)) {
-		t.Errorf("unmapped API error should be returned unchanged")
-	}
+	require.ErrorIs(t, friendlyAPIError(other, tokenPath), error(other))
 }
 
 func TestVlogf(t *testing.T) {
@@ -75,15 +60,11 @@ func TestVlogf(t *testing.T) {
 
 	vlogf(&buf, false, "hidden %d\n", 1)
 
-	if buf.Len() != 0 {
-		t.Errorf("vlogf should be silent when verbose is off, got %q", buf.String())
-	}
+	assert.Equal(t, 0, buf.Len())
 
 	vlogf(&buf, true, "shown %d\n", 2)
 
-	if !strings.Contains(buf.String(), "shown 2") {
-		t.Errorf("vlogf should write when verbose is on, got %q", buf.String())
-	}
+	assert.Contains(t, buf.String(), "shown 2")
 }
 
 func TestVersionCommand(t *testing.T) {
@@ -94,11 +75,7 @@ func TestVersionCommand(t *testing.T) {
 	root.SetErr(&buf)
 	root.SetArgs([]string{"version"})
 
-	if err := root.Execute(); err != nil {
-		t.Fatalf("version command: %v", err)
-	}
+	require.NoError(t, root.Execute())
 
-	if !strings.Contains(buf.String(), "gtask-extractor") {
-		t.Errorf("version output = %q, want it to contain 'gtask-extractor'", buf.String())
-	}
+	assert.Contains(t, buf.String(), "gtask-extractor")
 }

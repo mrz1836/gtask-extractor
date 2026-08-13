@@ -3,15 +3,15 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
 	"github.com/mrz1836/gtask-extractor/internal/auth"
@@ -35,9 +35,7 @@ func writeCreds(t *testing.T, dir string) string {
 	t.Helper()
 
 	path := filepath.Join(dir, "credentials.json")
-	if err := os.WriteFile(path, []byte(desktopCreds), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte(desktopCreds), 0o600))
 
 	return path
 }
@@ -47,13 +45,9 @@ func writeToken(t *testing.T, path string, tok *oauth2.Token) {
 	t.Helper()
 
 	data, err := json.MarshalIndent(tok, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(path, data, 0o600))
 }
 
 func TestAuthenticateSuccess(t *testing.T) {
@@ -71,13 +65,8 @@ func TestAuthenticateSuccess(t *testing.T) {
 	opts := &options{credsPath: credsPath, tokenPath: tokenPath, version: "test"}
 
 	client, err := authenticate(context.Background(), opts, io.Discard)
-	if err != nil {
-		t.Fatalf("authenticate: %v", err)
-	}
-
-	if client == nil {
-		t.Fatal("authenticate returned a nil client")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, client)
 }
 
 func TestAuthenticateMissingCreds(t *testing.T) {
@@ -88,37 +77,26 @@ func TestAuthenticateMissingCreds(t *testing.T) {
 	}
 
 	_, err := authenticate(context.Background(), opts, io.Discard)
-	if !errors.Is(err, auth.ErrCredentialsNotFound) {
-		t.Fatalf("err = %v, want auth.ErrCredentialsNotFound", err)
-	}
+	require.ErrorIs(t, err, auth.ErrCredentialsNotFound)
 
-	if got := ExitCode(err); got != exitAuth {
-		t.Errorf("ExitCode = %d, want exitAuth (%d)", got, exitAuth)
-	}
+	assert.Equal(t, exitAuth, ExitCode(err))
 	// The friendly message names the missing path so users know where to look.
-	if !strings.Contains(err.Error(), "nope.json") {
-		t.Errorf("err = %v, want it to mention the missing credentials path", err)
-	}
+	assert.Contains(t, err.Error(), "nope.json")
 }
 
 func TestAuthenticateInvalidCreds(t *testing.T) {
 	dir := t.TempDir()
 
 	credsPath := filepath.Join(dir, "credentials.json")
-	if err := os.WriteFile(credsPath, []byte("not json"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(credsPath, []byte("not json"), 0o600))
 
 	opts := &options{credsPath: credsPath, tokenPath: filepath.Join(dir, "token.json")}
 
 	_, err := authenticate(context.Background(), opts, io.Discard)
-	if err == nil || errors.Is(err, auth.ErrCredentialsNotFound) {
-		t.Fatalf("err = %v, want a parse error", err)
-	}
+	require.Error(t, err)
+	require.NotErrorIs(t, err, auth.ErrCredentialsNotFound)
 
-	if got := ExitCode(err); got != exitAuth {
-		t.Errorf("ExitCode = %d, want exitAuth (%d)", got, exitAuth)
-	}
+	assert.Equal(t, exitAuth, ExitCode(err))
 }
 
 func TestAuthenticateCorruptToken(t *testing.T) {
@@ -126,20 +104,15 @@ func TestAuthenticateCorruptToken(t *testing.T) {
 	credsPath := writeCreds(t, dir)
 
 	tokenPath := filepath.Join(dir, "token.json")
-	if err := os.WriteFile(tokenPath, []byte("{bad"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(tokenPath, []byte("{bad"), 0o600))
 
 	opts := &options{credsPath: credsPath, tokenPath: tokenPath}
 
 	_, err := authenticate(context.Background(), opts, io.Discard)
-	if got := ExitCode(err); got != exitAuth {
-		t.Fatalf("ExitCode = %d, want exitAuth (%d)", got, exitAuth)
-	}
+	require.Equal(t, exitAuth, ExitCode(err))
+
 	// The hint tells the user how to recover from a bad token cache.
-	if !strings.Contains(err.Error(), "re-run") {
-		t.Errorf("err = %v, want a friendly re-authorize hint", err)
-	}
+	assert.Contains(t, err.Error(), "re-run")
 }
 
 func TestRunExportAuthFailure(t *testing.T) {
@@ -157,11 +130,7 @@ func TestRunExportAuthFailure(t *testing.T) {
 	}
 
 	err := runExport(cmd, opts, nil, true)
-	if !errors.Is(err, auth.ErrCredentialsNotFound) {
-		t.Fatalf("err = %v, want auth.ErrCredentialsNotFound", err)
-	}
+	require.ErrorIs(t, err, auth.ErrCredentialsNotFound)
 
-	if got := ExitCode(err); got != exitAuth {
-		t.Errorf("ExitCode = %d, want exitAuth (%d)", got, exitAuth)
-	}
+	assert.Equal(t, exitAuth, ExitCode(err))
 }

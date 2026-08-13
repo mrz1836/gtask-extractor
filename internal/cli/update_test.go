@@ -4,15 +4,14 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAttachUpdateCommand(t *testing.T) {
 	root := &cobra.Command{Use: "gtask-extractor"}
 	cmd := attachUpdateCommand(root, "1.2.3")
 
-	if cmd.Name() != "update" {
-		t.Errorf("self-update command name = %q, want %q", cmd.Name(), "update")
-	}
+	assert.Equal(t, "update", cmd.Name())
 
 	hasUpgrade := false
 
@@ -22,14 +21,10 @@ func TestAttachUpdateCommand(t *testing.T) {
 		}
 	}
 
-	if !hasUpgrade {
-		t.Errorf("update command missing 'upgrade' alias, got %v", cmd.Aliases)
-	}
+	assert.True(t, hasUpgrade)
 
 	for _, f := range []string{"check", "force", "verbose"} {
-		if cmd.Flags().Lookup(f) == nil {
-			t.Errorf("update command missing --%s flag", f)
-		}
+		assert.NotNil(t, cmd.Flags().Lookup(f))
 	}
 }
 
@@ -44,7 +39,5 @@ func TestUpdateCommandWiredIntoRoot(t *testing.T) {
 		}
 	}
 
-	if !found {
-		t.Error("update command not registered on the root command")
-	}
+	assert.True(t, found)
 }

@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestUserAgent(t *testing.T) {
-	if got := userAgent("1.2.3"); got != "gtask-extractor/1.2.3" {
-		t.Errorf("userAgent = %q, want %q", got, "gtask-extractor/1.2.3")
-	}
+	assert.Equal(t, "gtask-extractor/1.2.3", userAgent("1.2.3"))
 }
 
 func TestExitCode(t *testing.T) {
@@ -28,9 +29,9 @@ func TestExitCode(t *testing.T) {
 		{"plain error is a usage error", errors.New("plain"), exitUsage},
 	}
 	for _, tc := range cases {
-		if got := ExitCode(tc.err); got != tc.want {
-			t.Errorf("%s: ExitCode = %d, want %d", tc.name, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, ExitCode(tc.err))
+		})
 	}
 }
 
@@ -42,9 +43,7 @@ func silenceStdio(t *testing.T) {
 	t.Helper()
 
 	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	origOut, origErr, origArgs := os.Stdout, os.Stderr, os.Args
 	os.Stdout, os.Stderr = devnull, devnull
@@ -63,9 +62,7 @@ func TestExecuteVersion(t *testing.T) {
 
 	os.Args = []string{"gtask-extractor", "version"}
 
-	if err := Execute(BuildInfo{Version: "1.2.3"}); err != nil {
-		t.Fatalf("Execute(version) = %v, want nil", err)
-	}
+	require.NoError(t, Execute(BuildInfo{Version: "1.2.3"}))
 }
 
 func TestExecuteNotInteractiveErrors(t *testing.T) {
@@ -79,15 +76,7 @@ func TestExecuteNotInteractiveErrors(t *testing.T) {
 	os.Args = []string{"gtask-extractor"}
 
 	err := Execute(BuildInfo{})
-	if err == nil {
-		t.Fatal("Execute() = nil, want the not-a-TTY error")
-	}
-
-	if !errors.Is(err, errNotInteractive) {
-		t.Errorf("err = %v, want errNotInteractive", err)
-	}
-
-	if got := ExitCode(err); got != exitUsage {
-		t.Errorf("ExitCode = %d, want exitUsage (%d)", got, exitUsage)
-	}
+	require.Error(t, err)
+	require.ErrorIs(t, err, errNotInteractive)
+	assert.Equal(t, exitUsage, ExitCode(err))
 }

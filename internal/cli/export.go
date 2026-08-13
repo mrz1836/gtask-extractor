@@ -7,6 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 	tasks "google.golang.org/api/tasks/v1"
+
+	"github.com/mrz1836/gtask-extractor/internal/export"
 )
 
 // newExportCmd builds the non-interactive `export` subcommand. It exports one or
@@ -70,12 +72,19 @@ func runExport(cmd *cobra.Command, opts *options, listIDs []string, all bool) er
 		return err
 	}
 
-	return runExportWith(ctx, client, opts, listIDs, all, out, errW)
+	// Convert the raw flag strings into domain IDs at this boundary so the rest
+	// of the flow works with typed list IDs.
+	ids := make([]export.ListID, len(listIDs))
+	for i, id := range listIDs {
+		ids[i] = export.ListID(id)
+	}
+
+	return runExportWith(ctx, client, opts, ids, all, out, errW)
 }
 
 // runExportWith fetches the account's lists, resolves the requested targets, and
 // exports each. It takes the client as an interface so it is fully testable.
-func runExportWith(ctx context.Context, client taskLister, opts *options, listIDs []string, all bool, out, errW io.Writer) error {
+func runExportWith(ctx context.Context, client taskLister, opts *options, listIDs []export.ListID, all bool, out, errW io.Writer) error {
 	lists, err := client.ListTaskLists(ctx)
 	if err != nil {
 		return coded(exitAPI, friendlyAPIError(err, opts.tokenPath))
@@ -105,14 +114,14 @@ func runExportWith(ctx context.Context, client taskLister, opts *options, listID
 // resolveTargets maps the requested selection onto concrete task lists. With
 // all=true it returns every list; otherwise it returns the lists matching the
 // requested IDs, in the order requested, erroring on the first unknown ID.
-func resolveTargets(lists []*tasks.TaskList, listIDs []string, all bool) ([]*tasks.TaskList, error) {
+func resolveTargets(lists []*tasks.TaskList, listIDs []export.ListID, all bool) ([]*tasks.TaskList, error) {
 	if all {
 		return lists, nil
 	}
 
-	byID := make(map[string]*tasks.TaskList, len(lists))
+	byID := make(map[export.ListID]*tasks.TaskList, len(lists))
 	for _, l := range lists {
-		byID[l.Id] = l
+		byID[export.ListID(l.Id)] = l
 	}
 
 	targets := make([]*tasks.TaskList, 0, len(listIDs))
