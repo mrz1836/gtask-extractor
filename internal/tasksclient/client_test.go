@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	tasks "google.golang.org/api/tasks/v1"
@@ -24,9 +26,7 @@ func newTestClient(t *testing.T, srv *httptest.Server, maxPages int) *Client {
 		option.WithHTTPClient(srv.Client()),
 		option.WithEndpoint(srv.URL),
 	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
+	require.NoError(t, err)
 
 	return &Client{svc: svc, maxPages: maxPages}
 }
@@ -35,9 +35,7 @@ func writeJSON(t *testing.T, w http.ResponseWriter, v any) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(v); err != nil {
-		t.Fatalf("encode: %v", err)
-	}
+	require.NoError(t, json.NewEncoder(w).Encode(v))
 }
 
 func TestListTaskListsPagination(t *testing.T) {
@@ -69,24 +67,16 @@ func TestListTaskListsPagination(t *testing.T) {
 	c := newTestClient(t, srv, 10)
 
 	lists, err := c.ListTaskLists(context.Background())
-	if err != nil {
-		t.Fatalf("ListTaskLists: %v", err)
-	}
+	require.NoError(t, err)
 
 	gotIDs := ids(lists)
-	if want := []string{"a", "b", "c"}; !equal(gotIDs, want) {
-		t.Errorf("ids = %v, want %v", gotIDs, want)
-	}
+	assert.Equal(t, []string{"a", "b", "c"}, gotIDs)
 
 	for _, p := range paths {
-		if p != "/tasks/v1/users/@me/lists" {
-			t.Errorf("path = %q, want /tasks/v1/users/@me/lists", p)
-		}
+		assert.Equal(t, "/tasks/v1/users/@me/lists", p)
 	}
 
-	if want := []string{"", "page2"}; !equal(tokens, want) {
-		t.Errorf("pageTokens sent = %v, want %v", tokens, want)
-	}
+	assert.Equal(t, []string{"", "page2"}, tokens)
 }
 
 func TestListTasksSetsAllShowFlags(t *testing.T) {
@@ -103,25 +93,17 @@ func TestListTasksSetsAllShowFlags(t *testing.T) {
 	c := newTestClient(t, srv, 10)
 
 	got, err := c.ListTasks(context.Background(), "LIST123")
-	if err != nil {
-		t.Fatalf("ListTasks: %v", err)
-	}
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "t1", got[0].Id)
 
-	if len(got) != 1 || got[0].Id != "t1" {
-		t.Errorf("tasks = %+v, want one task t1", got)
-	}
-
-	if gotPath != "/tasks/v1/lists/LIST123/tasks" {
-		t.Errorf("path = %q, want /tasks/v1/lists/LIST123/tasks", gotPath)
-	}
+	assert.Equal(t, "/tasks/v1/lists/LIST123/tasks", gotPath)
 
 	for _, want := range []string{
 		"showCompleted=true", "showHidden=true", "showDeleted=true",
 		"showAssigned=true", "maxResults=100",
 	} {
-		if !contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		assert.Contains(t, gotQuery, want)
 	}
 }
 
@@ -142,18 +124,14 @@ func TestListTasksPaginationOrdering(t *testing.T) {
 	c := newTestClient(t, srv, 10)
 
 	got, err := c.ListTasks(context.Background(), "L")
-	if err != nil {
-		t.Fatalf("ListTasks: %v", err)
-	}
+	require.NoError(t, err)
 
 	var ids []string
 	for _, tk := range got {
 		ids = append(ids, tk.Id)
 	}
 
-	if want := []string{"t1", "t2", "t3"}; !equal(ids, want) {
-		t.Errorf("ids = %v, want %v", ids, want)
-	}
+	assert.Equal(t, []string{"t1", "t2", "t3"}, ids)
 }
 
 func TestEmptyResult(t *testing.T) {
@@ -165,48 +143,46 @@ func TestEmptyResult(t *testing.T) {
 	c := newTestClient(t, srv, 10)
 
 	got, err := c.ListTasks(context.Background(), "L")
-	if err != nil {
-		t.Fatalf("ListTasks: %v", err)
-	}
-
-	if len(got) != 0 {
-		t.Errorf("expected no tasks, got %d", len(got))
-	}
+	require.NoError(t, err)
+	assert.Empty(t, got)
 }
 
 func TestHTTPErrorsSurface(t *testing.T) {
 	for _, code := range []int{http.StatusInternalServerError, http.StatusForbidden} {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			http.Error(w, `{"error":{"message":"nope"}}`, code)
-		}))
-		c := newTestClient(t, srv, 10)
-		_, err := c.ListTasks(context.Background(), "L")
+		t.Run(fmt.Sprintf("code_%d", code), func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, `{"error":{"message":"nope"}}`, code)
+			}))
+			defer srv.Close()
 
-		srv.Close()
+			c := newTestClient(t, srv, 10)
 
-		if err == nil {
-			t.Fatalf("code %d: expected error, got nil", code)
-		}
+			_, err := c.ListTasks(context.Background(), "L")
+			require.Error(t, err)
 
-		if gerr, ok := errors.AsType[*googleapi.Error](err); !ok || gerr.Code != code {
-			t.Errorf("code %d: error = %v, want googleapi.Error with that code", code, err)
-		}
+			gerr, ok := errors.AsType[*googleapi.Error](err)
+			require.True(t, ok)
+			assert.Equal(t, code, gerr.Code)
+		})
 	}
 }
 
 func TestListTaskListsHTTPErrorSurfaces(t *testing.T) {
 	for _, code := range []int{http.StatusInternalServerError, http.StatusForbidden} {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			http.Error(w, `{"error":{"message":"nope"}}`, code)
-		}))
-		c := newTestClient(t, srv, 10)
-		_, err := c.ListTaskLists(context.Background())
+		t.Run(fmt.Sprintf("code_%d", code), func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, `{"error":{"message":"nope"}}`, code)
+			}))
+			defer srv.Close()
 
-		srv.Close()
+			c := newTestClient(t, srv, 10)
 
-		if gerr, ok := errors.AsType[*googleapi.Error](err); !ok || gerr.Code != code {
-			t.Errorf("code %d: error = %v, want googleapi.Error with that code", code, err)
-		}
+			_, err := c.ListTaskLists(context.Background())
+
+			gerr, ok := errors.AsType[*googleapi.Error](err)
+			require.True(t, ok)
+			assert.Equal(t, code, gerr.Code)
+		})
 	}
 }
 
@@ -223,9 +199,7 @@ func TestPaginationLoopGuard(t *testing.T) {
 	c := newTestClient(t, srv, 1000)
 
 	_, err := c.ListTasks(context.Background(), "L")
-	if !errors.Is(err, errPaginationLoop) {
-		t.Fatalf("err = %v, want errPaginationLoop", err)
-	}
+	require.ErrorIs(t, err, errPaginationLoop)
 }
 
 func TestMaxPagesGuard(t *testing.T) {
@@ -243,13 +217,8 @@ func TestMaxPagesGuard(t *testing.T) {
 	c := newTestClient(t, srv, 3)
 
 	_, err := c.ListTasks(context.Background(), "L")
-	if !errors.Is(err, errTooManyPages) {
-		t.Fatalf("err = %v, want errTooManyPages", err)
-	}
-
-	if !contains(err.Error(), "max 3 pages") {
-		t.Errorf("err = %v, want it to mention the page cap", err)
-	}
+	require.ErrorIs(t, err, errTooManyPages)
+	assert.Contains(t, err.Error(), "max 3 pages")
 }
 
 func TestContextCancel(t *testing.T) {
@@ -262,13 +231,12 @@ func TestContextCancel(t *testing.T) {
 	cancel() // cancel before the call
 
 	c := newTestClient(t, srv, 10)
-	if _, err := c.ListTasks(ctx, "L"); !errors.Is(err, context.Canceled) {
-		t.Fatalf("err = %v, want context.Canceled", err)
-	}
 
-	if _, err := c.ListTaskLists(ctx); !errors.Is(err, context.Canceled) {
-		t.Fatalf("err = %v, want context.Canceled", err)
-	}
+	_, err := c.ListTasks(ctx, "L")
+	require.ErrorIs(t, err, context.Canceled)
+
+	_, err = c.ListTaskLists(ctx)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 // --- small local helpers (no external deps) ---
@@ -280,22 +248,4 @@ func ids(lists []*tasks.TaskList) []string {
 	}
 
 	return out
-}
-
-func equal(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-
-	return true
-}
-
-func contains(s, sub string) bool {
-	return strings.Contains(s, sub)
 }
