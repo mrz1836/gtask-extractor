@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -164,6 +165,21 @@ func TestFormatDate(t *testing.T) {
 		if got := formatDate(in); got != want {
 			t.Errorf("formatDate(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// TestIsInteractive exercises IsInteractive with plain files, which are never
+// terminals — so the result is deterministic in CI and local runs alike.
+func TestIsInteractive(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "notatty")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() { _ = f.Close() }()
+
+	if IsInteractive(f, f) {
+		t.Error("a regular file should not be reported as an interactive terminal")
 	}
 }
 
