@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"bytes"
@@ -89,7 +89,7 @@ func TestVlogf(t *testing.T) {
 func TestVersionCommand(t *testing.T) {
 	var buf bytes.Buffer
 
-	root := newRootCmd()
+	root := newRootCmd(BuildInfo{})
 	root.SetOut(&buf)
 	root.SetErr(&buf)
 	root.SetArgs([]string{"version"})
@@ -98,7 +98,7 @@ func TestVersionCommand(t *testing.T) {
 		t.Fatalf("version command: %v", err)
 	}
 
-	if !strings.Contains(buf.String(), "gtasks") {
-		t.Errorf("version output = %q, want it to contain 'gtasks'", buf.String())
+	if !strings.Contains(buf.String(), "gtask-extractor") {
+		t.Errorf("version output = %q, want it to contain 'gtask-extractor'", buf.String())
 	}
 }

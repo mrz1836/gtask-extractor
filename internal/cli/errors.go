@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 // codedError attaches a process exit code to an error so Execute can map typed
 // failures to the documented exit codes.

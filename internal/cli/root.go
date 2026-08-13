@@ -1,8 +1,8 @@
-// Package cmd wires the Cobra command tree: the interactive flow (run when
-// gtasks is invoked with no subcommand), the non-interactive `export`
-// subcommand, the `version` subcommand, and the shared authentication, export,
-// and exit-code-mapping helpers.
-package cmd
+// Package cli wires the Cobra command tree: the interactive flow (run when
+// gtask-extractor is invoked with no subcommand), the non-interactive `export`
+// subcommand, the `version` and self-`update` subcommands, and the shared
+// authentication, export, and exit-code-mapping helpers.
+package cli
 
 import (
 	"bufio"
@@ -19,11 +19,47 @@ import (
 	tasks "google.golang.org/api/tasks/v1"
 
 	"github.com/mrz1836/gtask-extractor/internal/auth"
-	"github.com/mrz1836/gtask-extractor/internal/buildinfo"
 	"github.com/mrz1836/gtask-extractor/internal/export"
 	"github.com/mrz1836/gtask-extractor/internal/tasksclient"
 	"github.com/mrz1836/gtask-extractor/internal/ui"
 )
+
+// BuildInfo carries version metadata injected via ldflags (see .goreleaser.yml)
+// and threaded in from package main.
+type BuildInfo struct {
+	Version string
+	Commit  string
+	Date    string
+}
+
+// resolvedBuildInfo applies "dev"/"unknown" defaults to empty fields.
+func resolvedBuildInfo(info BuildInfo) (version, commit, date string) {
+	version, commit, date = info.Version, info.Commit, info.Date
+	if version == "" {
+		version = "dev"
+	}
+
+	if commit == "" {
+		commit = "unknown"
+	}
+
+	if date == "" {
+		date = "unknown"
+	}
+
+	return version, commit, date
+}
+
+// formatVersion renders a human-friendly version string.
+func formatVersion(info BuildInfo) string {
+	v, c, d := resolvedBuildInfo(info)
+	return fmt.Sprintf("%s (commit: %s, built: %s)", v, c, d)
+}
+
+// userAgent is the HTTP User-Agent sent to the Google Tasks API.
+func userAgent(version string) string {
+	return "gtask-extractor/" + version
+}
 
 // Exit codes (documented in the README).
 const (
@@ -39,7 +75,7 @@ const (
 var (
 	// errNotInteractive is returned when the interactive flow is run without a terminal.
 	errNotInteractive = errors.New(
-		"gtasks is interactive and must be run in a terminal (stdin and stdout must be a TTY)",
+		"gtask-extractor is interactive and must be run in a terminal (stdin and stdout must be a TTY)",
 	)
 	// errNoTarget is returned when `export` is invoked without a target.
 	errNoTarget = errors.New("nothing to export: pass --list <id> (repeatable) or --all")
@@ -49,12 +85,13 @@ var (
 	errListNotFound = errors.New("task list not found")
 )
 
-// options holds the resolved global flags for a run.
+// options holds the resolved global flags (and build version) for a run.
 type options struct {
 	credsPath string
 	tokenPath string
 	outputDir string
 	verbose   bool
+	version   string // resolved build version, for the User-Agent + export metadata
 }
 
 // taskLister is the read surface both flows need from the tasks client. It is
@@ -68,19 +105,20 @@ type taskLister interface {
 // newRootCmd builds the command tree. Everything is constructed here (no
 // package-level command/flag state and no init()), which keeps the CLI easy to
 // test and free of global mutable state.
-func newRootCmd() *cobra.Command {
-	opts := &options{}
+func newRootCmd(info BuildInfo) *cobra.Command {
+	version, _, _ := resolvedBuildInfo(info)
+	opts := &options{version: version}
 
 	root := &cobra.Command{
-		Use:   "gtasks",
+		Use:   "gtask-extractor",
 		Short: "Export all of your Google Tasks data to JSON",
-		Long: `gtasks exports every field of every task in a chosen Google Tasks list —
-including metadata the Tasks UI never shows (updated/created time, position,
-completed, hidden, deleted, links and assignment info).
+		Long: `gtask-extractor exports every field of every task in a chosen Google Tasks
+list — including metadata the Tasks UI never shows (updated/created time,
+position, completed, hidden, deleted, links and assignment info).
 
 Run it with no arguments for the interactive flow: it authorizes read-only
 access, lists your task lists, and exports the one you pick to a JSON file.`,
-		Version:       buildinfo.Version,
+		Version:       formatVersion(info),
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -95,38 +133,51 @@ access, lists your task lists, and exports the one you pick to a JSON file.`,
 	pf.StringVar(&opts.outputDir, "output-dir", "output", "directory for exported JSON files")
 	pf.BoolVarP(&opts.verbose, "verbose", "v", false, "enable verbose logging")
 
-	root.SetVersionTemplate("gtasks {{.Version}}\n")
+	root.SetVersionTemplate("gtask-extractor {{.Version}}\n")
 	// Map flag-parse errors to the documented usage exit code (2).
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return coded(exitUsage, err)
 	})
-	root.AddCommand(newVersionCmd(), newExportCmd(opts))
+	root.AddCommand(newVersionCmd(info), newExportCmd(opts))
+
+	// Register the self-update command (`update`, alias `upgrade`) + passive
+	// "new version available" notice, using the running build's version.
+	attachUpdateCommand(root, version)
 
 	return root
 }
 
-// Execute runs the command tree and returns a process exit code.
-func Execute() int {
+// Execute builds and runs the command tree with the given build info. It prints
+// a user-facing error (except on a clean Ctrl-C) and returns the raw error so
+// main can map it to a process exit code via ExitCode.
+func Execute(info BuildInfo) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	err := newRootCmd().ExecuteContext(ctx)
+	err := newRootCmd(info).ExecuteContext(ctx)
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+	}
+
+	return err
+}
+
+// ExitCode maps an error returned by Execute to a process exit code.
+func ExitCode(err error) int {
 	switch {
 	case err == nil:
 		return exitOK
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		// A clean, user-initiated abort (Ctrl-C): no scary error line.
+		// A clean, user-initiated abort (Ctrl-C).
 		return exitAborted
 	}
-
-	fmt.Fprintln(os.Stderr, "Error:", err)
 
 	if ce, ok := errors.AsType[*codedError](err); ok {
 		return ce.code
 	}
 
-	// Anything else reaching here is a Cobra usage error (bad flag, wrong args,
-	// mutually-exclusive flags); our own RunE always returns a *codedError.
+	// Anything else is a Cobra usage error (bad flag, wrong args, mutually-
+	// exclusive flags); our own RunE always returns a *codedError.
 	return exitUsage
 }
 
@@ -216,7 +267,7 @@ func exportList(ctx context.Context, client export.Lister, list *tasks.TaskList,
 
 	path, counts, err := export.Run(ctx, client, list, export.Options{
 		OutDir:      opts.outputDir,
-		ToolVersion: buildinfo.Version,
+		ToolVersion: opts.version,
 		Now:         time.Now,
 	})
 	if err != nil {
@@ -256,7 +307,7 @@ func authenticate(ctx context.Context, opts *options, errW io.Writer) (*taskscli
 		))
 	}
 
-	client, err := tasksclient.New(ctx, httpClient, buildinfo.UserAgent())
+	client, err := tasksclient.New(ctx, httpClient, userAgent(opts.version))
 	if err != nil {
 		return nil, coded(exitAPI, err)
 	}

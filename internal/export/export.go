@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	toolName      = "gtasks"
+	toolName      = "gtask-extractor"
 	scopeReadonly = "https://www.googleapis.com/auth/tasks.readonly"
 
 	// maxSlugLen caps the title-derived portion of the output filename.

@@ -3,6 +3,7 @@ module github.com/mrz1836/gtask-extractor
 go 1.26.5
 
 require (
+	github.com/mrz1836/go-selfupdate v0.1.3
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/term v0.45.0

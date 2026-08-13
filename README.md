@@ -8,7 +8,7 @@
 
 <a href="https://github.com/mrz1836/gtask-extractor/releases"><img src="https://img.shields.io/github/release-pre/mrz1836/gtask-extractor?include_prereleases&style=flat-square&logo=github&color=black" alt="Release"></a>
 <a href="https://golang.org/"><img src="https://img.shields.io/github/go-mod/go-version/mrz1836/gtask-extractor?style=flat-square&logo=go&color=00ADD8" alt="Go Version"></a>
-<a href="https://github.com/mrz1836/gtask-extractor/blob/master/LICENSE"><img src="https://img.shields.io/github/license/mrz1836/gtask-extractor?style=flat-square&color=blue&v=2" alt="License"></a>
+<a href="https://github.com/mrz1836/gtask-extractor/blob/master/LICENSE"><img src="https://img.shields.io/github/license/mrz1836/gtask-extractor?style=flat-square&color=blue&v=1" alt="License"></a>
 
 <br/>
 
@@ -112,7 +112,7 @@
 
 <br/>
 
-`gtask-extractor` (binary: `gtasks`) is a small, local, read-only CLI that snapshots a Google
+`gtask-extractor` (binary: `gtask-extractor`) is a small, local, read-only CLI that snapshots a Google
 Tasks list to JSON — capturing not just titles and notes but `updated` (which doubles as the
 creation time), `position`, `completed`, `hidden`, `deleted`, `parent`, `links`, and
 assignment info from Docs/Chat. Fields the raw API drops (`false`, `""`, `null`, `[]`) are all
@@ -120,11 +120,11 @@ preserved.
 
 - ✅ **Read-only** — requests only the `tasks.readonly` scope; it can never modify or delete tasks.
 - ✅ **Captures every field** — its own JSON envelope preserves values the Google client would drop.
-- ✅ **Two modes** — a friendly interactive picker, or a scriptable `gtasks export --list <id> / --all`.
+- ✅ **Two modes** — a friendly interactive picker, or a scriptable `gtask-extractor export --list <id> / --all`.
 - ✅ **Runs locally** — your data never leaves your machine; there is no server.
 
 ```text
-$ gtasks
+$ gtask-extractor
 Your task lists:
 #  TITLE         UPDATED     ID
 1  My Tasks      2026-08-10  MTIzNDU2Nzg5MDEyMzQ1Njc4OTA
@@ -140,26 +140,57 @@ Select a list to export [1-3] (q to quit): 3
 
 ## 🚀 Installation
 
-Requires a [supported release of Go](https://golang.org/doc/devel/release.html#policy)
-(**Go 1.26+** — the tool uses `crypto/rand.Text`, `errors.AsType`, and `reflect.Type.Fields`).
+Requires **Go 1.26+** (the tool uses `crypto/rand.Text`, `errors.AsType`, and
+`reflect.Type.Fields`).
+
+### Prebuilt binaries (recommended)
+
+Once a release is tagged, cross-platform archives are published via [GoReleaser](.goreleaser.yml)
+on the [releases page](https://github.com/mrz1836/gtask-extractor/releases). Install the latest into
+`~/.local/bin` (user-writable, no `sudo`) with a single copy-paste — `gtask-extractor update` can
+self-update it in place afterward:
+
+```bash
+# Install the latest gtask-extractor release into ~/.local/bin
+VER=$(curl -fsSL https://api.github.com/repos/mrz1836/gtask-extractor/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d v)
+OS=$(uname -s | tr '[:upper:]' '[:lower:]'); ARCH=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+mkdir -p ~/.local/bin
+curl -fsSL "https://github.com/mrz1836/gtask-extractor/releases/download/v${VER}/gtask-extractor_${VER}_${OS}_${ARCH}.tar.gz" | tar -xzf - -C ~/.local/bin gtask-extractor
+gtask-extractor --version
+```
+
+If `gtask-extractor` isn't found afterward, add `~/.local/bin` to your `PATH`
+(`export PATH="$HOME/.local/bin:$PATH"` in your `~/.zshrc` or `~/.bashrc`).
+
+### Keeping it up to date
+
+Binaries installed from a release archive self-update:
+
+```bash
+gtask-extractor update            # install the latest release (verifies the SHA-256 checksum)
+gtask-extractor update --check    # only report whether a newer version exists
+gtask-extractor update --force    # reinstall even if already current
+```
+
+It installs only from the project's GitHub release archives and refuses to overwrite a binary
+managed by `go install` or Homebrew. `gtask-extractor` also prints a one-line notice when a newer
+version is available — opt out with `GTASK_EXTRACTOR_NO_UPDATE_CHECK=1`, `NO_UPDATE_CHECK=1`, or by
+running in CI.
+
+<details>
+<summary><strong>Build from source (contributors)</strong></summary>
+<br/>
 
 ```bash
 git clone https://github.com/mrz1836/gtask-extractor.git
 cd gtask-extractor
-magex build          # → ./bin/gtasks   (or: go build -o gtasks .)
+go build -o bin/gtask-extractor ./cmd/gtask-extractor
+./bin/gtask-extractor version
 ```
 
-> This project uses [**MAGE-X**](https://github.com/mrz1836/mage-x) for builds — there is no
-> Makefile. Install it once with `go install github.com/mrz1836/mage-x/cmd/magex@latest`, then
-> run `magex help` to see every target. `go build`/`go run` work too.
-
-<details>
-<summary><strong>Prebuilt binaries</strong></summary>
-<br/>
-
-Once a release is tagged, cross-platform binaries are published via [GoReleaser](.goreleaser.yml)
-on the [releases page](https://github.com/mrz1836/gtask-extractor/releases). Download the archive
-for your OS/arch, extract the `gtasks` binary onto your `PATH`, and run `gtasks --version`.
+This project uses [**MAGE-X**](https://github.com/mrz1836/mage-x) for builds — there is no Makefile.
+Install it once with `go install github.com/mrz1836/mage-x/cmd/magex@latest`, then `magex build`
+(the binary lands at `./cmd/gtask-extractor/gtask-extractor`). Run `magex help` for every target.
 
 </details>
 
@@ -192,7 +223,7 @@ setup in the [Google Cloud Console](https://console.cloud.google.com/).
 4. **Create the OAuth client ID** (**Credentials → Create credentials → OAuth client ID**, newer
    UI: **Clients → Create client**) → Application type **Desktop app** → **Create**.
 5. **Download the JSON** and save it as **`credentials.json`** in the directory where you'll run
-   `gtasks`.
+   `gtask-extractor`.
 
 `credentials.json` identifies the app; it is not a password, but it is still a secret — it's
 git-ignored by this repo.
@@ -202,10 +233,12 @@ git-ignored by this repo.
 ## ⚡ Quick Start
 
 ```bash
-magex build                         # → ./bin/gtasks
-./bin/gtasks                        # opens the browser once for read-only consent
+gtask-extractor            # opens the browser once for read-only consent
 # → pick a list from the numbered menu; JSON lands in ./output/
 ```
+
+> Examples call the binary as `gtask-extractor` (on your `PATH`). From a source build use the
+> full path, e.g. `./bin/gtask-extractor`.
 
 On the **first run** a browser opens to Google's consent screen. Sign in with the Test-user
 account → **"Google hasn't verified this app"** → **Advanced → Go to \<your app name\> (unsafe)**
@@ -217,7 +250,7 @@ anywhere.
 
 ## 📚 Usage
 
-`gtasks` has two modes: a friendly **interactive picker** (default) and a scriptable **`export`**
+`gtask-extractor` has two modes: a friendly **interactive picker** (default) and a scriptable **`export`**
 subcommand.
 
 <br/>
@@ -225,7 +258,7 @@ subcommand.
 ### Interactive (default)
 
 ```bash
-gtasks
+gtask-extractor
 ```
 
 Prints a numbered table of your task lists (with IDs); type a number to export one (or `q` to
@@ -237,12 +270,12 @@ quit), then it offers to export another. Needs a terminal — if stdin/stdout ar
 ### Non-interactive (`export`) — scripts, cron, re-pulls
 
 ```bash
-gtasks export --list <id>                 # one list
-gtasks export --list <id> --list <id>     # several (repeat --list)
-gtasks export --all                       # every task list
+gtask-extractor export --list <id>                 # one list
+gtask-extractor export --list <id> --list <id>     # several (repeat --list)
+gtask-extractor export --all                       # every task list
 
 # Nightly snapshot of everything into a dated folder
-gtasks export --all --output-dir "backups/$(date +%F)"
+gtask-extractor export --all --output-dir "backups/$(date +%F)"
 ```
 
 `--list` and `--all` are mutually exclusive; an unknown ID exits `2`. The first run still opens the
@@ -263,10 +296,11 @@ Global (apply to every command):
 | `--version` | | Print the version and exit |
 | `--help`, `-h` | | Show help (works on subcommands too) |
 
-Subcommands: `gtasks export …`, `gtasks version`.
+Subcommands: `gtask-extractor export …`, `gtask-extractor update` (self-update; alias `upgrade`),
+`gtask-extractor version`.
 
 The machine-facing result (`✓ Exported N tasks … → <path>`) goes to **stdout**; prompts, progress,
-and the counts breakdown go to **stderr** — so `gtasks export --list <id> >paths.txt` captures just
+and the counts breakdown go to **stderr** — so `gtask-extractor export --list <id> >paths.txt` captures just
 the file paths.
 
 **Exit codes:** `0` success · `2` usage / not a TTY / bad flags · `3` credentials or consent
@@ -318,7 +352,7 @@ and a `counts` breakdown) and a `list` block with the six task-list fields.
   "schemaVersion": "1.0",
   "export": {
     "generatedAt": "2026-08-12T15:04:05Z",
-    "tool": "gtasks",
+    "tool": "gtask-extractor",
     "toolVersion": "1.0.0",
     "scope": "https://www.googleapis.com/auth/tasks.readonly",
     "listId": "MDEyMzQ1",
@@ -393,8 +427,8 @@ Read the full [security policy](.github/SECURITY.md).
 | `redirect_uri_mismatch` | Your OAuth client is the wrong type — it must be **Desktop app**. |
 | `403` / "Tasks API has not been used…" | Enable the **Tasks API**: <https://console.cloud.google.com/apis/library/tasks.googleapis.com>. |
 | `credentials.json not found` | Download the OAuth **Desktop app** JSON and save it as `credentials.json` (or pass `--creds <path>`). |
-| `nothing to export` / `task list not found` | Pass `--list <id>` (repeatable) or `--all`; get IDs from the interactive picker or `gtasks export --all`. |
-| "must be run in a terminal" | Interactive mode needs a TTY — use `gtasks export --list <id>` / `--all` for scripts and pipes. |
+| `nothing to export` / `task list not found` | Pass `--list <id>` (repeatable) or `--all`; get IDs from the interactive picker or `gtask-extractor export --all`. |
+| "must be run in a terminal" | Interactive mode needs a TTY — use `gtask-extractor export --list <id>` / `--all` for scripts and pipes. |
 
 <br/>
 
@@ -426,7 +460,7 @@ magex help
 ```
 
 Common commands:
-- `magex build` — build `./bin/gtasks`
+- `magex build` — build the `gtask-extractor` binary
 - `magex test` — run the test suite
 - `magex lint` — run all linters
 - `magex deps:update` — update dependencies
@@ -455,15 +489,17 @@ See all workflows in [`.github/workflows/`](.github/workflows/).
 
 ```text
 .
-├── main.go                     # thin entrypoint: os.Exit(cmd.Execute())
-├── cmd/                        # Cobra tree: interactive root, `export`, `version`; exit-code mapping
+├── cmd/gtask-extractor/        # thin entrypoint: ldflags version vars → cli.Execute
 └── internal/
+    ├── cli/                    # Cobra tree: interactive root, `export`, `version`, self-`update`; exit-code mapping
     ├── auth/                   # OAuth loopback + PKCE, token cache, persisting refresh
     ├── tasksclient/            # paginating wrapper around the Tasks API (generic paginate; interface)
     ├── export/                 # JSON envelope, converters, atomic writer, filename slug
-    ├── ui/                     # numbered list table + stdin picker (stdlib only)
-    └── buildinfo/              # ldflags-injected version
+    └── ui/                     # numbered list table + stdin picker (stdlib only)
 ```
+
+Version metadata (`version`/`commit`/`buildDate`) is injected into `cmd/gtask-extractor` via
+`-ldflags` — see [`.goreleaser.yml`](.goreleaser.yml) and [`.mage.yaml`](.mage.yaml).
 
 A reflection test (`TestNoDroppedFields`) walks the JSON tags of every `tasks.*` type the exporter
 mirrors and fails if a field is unmapped — so a future Google client bump that adds a task field
@@ -513,6 +549,6 @@ to ensure this journey continues indefinitely! :rocket:
 
 ## ⚖️ License
 
-[![License](https://img.shields.io/github/license/mrz1836/gtask-extractor?style=flat-square&color=blue&v=2)](LICENSE)
+[![License](https://img.shields.io/github/license/mrz1836/gtask-extractor?style=flat-square&color=blue&v=1)](LICENSE)
 
 This project is licensed under the terms of the MIT license. See [LICENSE](LICENSE).

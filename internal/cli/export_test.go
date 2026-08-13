@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"bytes"
@@ -127,7 +127,7 @@ func TestRunExportUsageGuards(t *testing.T) {
 
 func TestExportCommandWiring(t *testing.T) {
 	// The export subcommand is registered and carries its flags.
-	root := newRootCmd()
+	root := newRootCmd(BuildInfo{})
 
 	var found *cobra.Command
 

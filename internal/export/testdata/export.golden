@@ -2,7 +2,7 @@
   "schemaVersion": "1.0",
   "export": {
     "generatedAt": "2026-08-12T15:04:05Z",
-    "tool": "gtasks",
+    "tool": "gtask-extractor",
     "toolVersion": "test",
     "scope": "https://www.googleapis.com/auth/tasks.readonly",
     "listId": "MDEyMzQ1",
