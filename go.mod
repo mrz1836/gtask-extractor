@@ -6,7 +6,7 @@ require (
 	github.com/mrz1836/go-selfupdate v0.1.4
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
-	golang.org/x/oauth2 v0.36.0
+	golang.org/x/oauth2 v0.37.0
 	golang.org/x/term v0.45.0
 	google.golang.org/api v0.297.0
 )
